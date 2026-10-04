@@ -30,6 +30,12 @@ A letter that would lead to a dead end is held back as a dashed "typo" tile inst
 trimming straight away, so Backspace removes just that letter and typing carries on from
 the word in progress. Typing another letter instead commits it and the trimming above applies.
 
+A word that is spoken stays in the buffer while the voice says it: its tiles pop in one
+after another, glow, and sparkles twinkle beside them. Once the voice has finished and at
+least `HOLD` (1.5 seconds) has passed, it moves to the "Said" log. Pressing any key moves
+it there at once, so typing is never held up. Devices set to reduce motion keep the
+colour change but drop the animation.
+
 Letters are batched into a single utterance when typing outruns the voice, because each
 `speechSynthesis.speak()` call carries 100–200 ms of fixed overhead regardless of how
 short the text is. Speaking them one at a time cannot keep up with a fast typist. The
@@ -89,8 +95,8 @@ currently `vaughan` → `Vaughn`. The display always shows the real spelling.
 
 ## Settings
 
-Voice, speed, letter names vs phonics (`buh, ah, tuh`), pause length, and whether whole
-words are spoken. Stored in `localStorage` per browser.
+Voice, speed, letter names vs phonics (`buh, ah, tuh`), pause length (1.2, 2, 3.2 or 5
+seconds), and whether whole words are spoken. Stored in `localStorage` per browser.
 
 ## Known limits
 

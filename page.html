@@ -125,7 +125,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .letter.idle { color: var(--line); }
 @media (prefers-reduced-motion: reduce) { .letter { transition: none; } }
 
-.buffer { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 46px; align-items: center; }
+.buffer { position: relative; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 46px; align-items: center; }
 .tile {
   font-family: var(--display);
   font-weight: 500;
@@ -136,6 +136,24 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   border-radius: 8px;
 }
 .buffer.isword .tile { background: var(--spark-soft); color: var(--spark); }
+/* A finished word stays here while it is spoken: tiles pop in turn, glow, and sparkles twinkle. */
+.buffer.celebrate .tile {
+  background: var(--spark-soft); color: var(--spark);
+  animation: pop .45s cubic-bezier(.3, 1.6, .5, 1) both, glow .9s ease-in-out alternate infinite;
+  animation-delay: calc(var(--i) * 70ms), calc(.45s + var(--i) * 70ms);
+}
+.buffer.celebrate::before, .buffer.celebrate::after {
+  content: "✦"; position: absolute; color: var(--spark); font-size: 1.1rem; pointer-events: none;
+  animation: twinkle 1s ease-in-out infinite;
+}
+.buffer.celebrate::before { left: calc(50% - var(--w) * 22px - 26px); top: -6px; }
+.buffer.celebrate::after  { left: calc(50% + var(--w) * 22px + 8px); bottom: -6px; animation-delay: .5s; }
+@keyframes pop { from { transform: translateY(10px) scale(.5); opacity: 0; } 60% { transform: translateY(-8px) scale(1.15); } to { transform: none; opacity: 1; } }
+@keyframes glow { to { box-shadow: 0 0 0 2px var(--spark), 0 0 16px var(--spark); } }
+@keyframes twinkle { 0%, 100% { transform: scale(.4) rotate(0); opacity: 0; } 50% { transform: scale(1.2) rotate(90deg); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .buffer.celebrate .tile, .buffer.celebrate::before, .buffer.celebrate::after { animation: none; }
+}
 .buffer .tile.typo { background: transparent; color: var(--oops); outline: 2px dashed var(--oops); outline-offset: -2px; }
 .hint { color: var(--muted); font-size: 0.85rem; font-weight: 300; text-align: center; margin: 0; }
 
@@ -246,7 +264,7 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
         <input type="range" id="rate" min="0.5" max="1.4" step="0.05" value="0.9">
       </label>
       <label class="check"><input type="checkbox" id="words" checked> Say whole words</label>
-      <label class="check"><input type="checkbox" id="zee"> Say “zee” instead of “zed”</label>
+      <label class="check"><input type="checkbox" id="zee" checked> Say “zee” instead of “zed”</label>
     </div>
   </details>
 
@@ -375,6 +393,8 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
   // ---------------------------------------------------------------- buffer
   var MAX_WORD = 24;
   var buf = "", lastKey = 0, quietAt = 0;
+  var said = "", saidAt = 0;   // a finished word held in the buffer while it is spoken, then logged
+  var HOLD = 1500;             // shortest time it stays, even when speech is off or quick
   var typo = "";     // a letter that led nowhere, held so Backspace can undo it before buf is trimmed
   var elLetter = document.getElementById("letter");
   var elBuffer = document.getElementById("buffer");
@@ -382,12 +402,17 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
 
   function paintBuffer() {
     elBuffer.innerHTML = "";
-    for (var i = 0; i < buf.length; i++) {
+    var celebrate = !!said && !buf && !typo;
+    var shown = celebrate ? said : buf;
+    for (var i = 0; i < shown.length; i++) {
       var t = document.createElement("div");
       t.className = "tile";
-      t.textContent = buf[i];
+      t.textContent = shown[i];
+      t.style.setProperty("--i", i);
       elBuffer.appendChild(t);
     }
+    elBuffer.classList.toggle("celebrate", celebrate);
+    elBuffer.style.setProperty("--w", shown.length);
     if (typo) {
       var x = document.createElement("div");
       x.className = "tile typo";
@@ -427,8 +452,16 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
   }
 
   function sayWord() {
+    if (said) logWord(said);                    // one still showing is bumped straight to the log
     if (document.getElementById("words").checked) say(spokenForm(buf), true);
-    logWord(buf);
+    said = buf; saidAt = Date.now();
+  }
+
+  function retireSaid() {                       // move the finished word from the buffer to the log
+    if (!said) return;
+    logWord(said);
+    said = "";
+    paintBuffer();
   }
 
   function clearBuf() { buf = ""; typo = ""; paintBuffer(); }
@@ -470,6 +503,7 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
   // so a fast typist can stay ahead of it and reach the longer word.
   setInterval(function () {
     var quiet = !speaking && queue.length === 0;
+    if (said && quiet && Date.now() - saidAt > HOLD) retireSaid();
     if (!quiet) { quietAt = 0; return; }        // still saying letters — the pause hasn't started
     if (!quietAt) quietAt = Date.now();
     if (!buf && !typo) return;
@@ -483,6 +517,7 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
 
   // ---------------------------------------------------------------- input
   function handleKeyChar(ch, code) {
+    retireSaid();                               // typing on moves a finished word to the log at once
     if (/^[a-z]$/.test(ch)) onLetter(ch);
     else if (/^[0-9]$/.test(ch)) onDigit(ch);
     else if (code === "Space" || code === "Enter") finishWord();
