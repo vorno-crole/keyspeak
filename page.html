@@ -1,0 +1,587 @@
+<title>KeySpeak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lexend:wght@300;400;500;600&display=swap">
+<style>
+/* Layout: one screen — stage (letter + building word) above, keyboard and controls below. */
+:root {
+  --bg: #eef1f7;
+  --surface: #ffffff;
+  --surface-2: #e3e8f2;
+  --ink: #141a2b;
+  --muted: #5a6480;
+  --line: #c9d1e3;
+  --accent: #2b3fd6;
+  --accent-soft: #dde2fb;
+  --spark: #e8900c;
+  --spark-soft: #fbead0;
+  --display: "Fredoka", "Trebuchet MS", sans-serif;
+  --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1220;
+    --surface: #171d31;
+    --surface-2: #202843;
+    --ink: #e9edf8;
+    --muted: #9aa5c4;
+    --line: #2e3755;
+    --accent: #8296ff;
+    --accent-soft: #232c4d;
+    --spark: #f5b53d;
+    --spark-soft: #3a2f16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1220;
+  --surface: #171d31;
+  --surface-2: #202843;
+  --ink: #e9edf8;
+  --muted: #9aa5c4;
+  --line: #2e3755;
+  --accent: #8296ff;
+  --accent-soft: #232c4d;
+  --spark: #f5b53d;
+  --spark-soft: #3a2f16;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-inline: 18px;
+  padding-block: 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- header ---- */
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin: 0;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.brand p { margin: 0; color: var(--muted); font-size: 0.82rem; font-weight: 300; }
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+.primary[aria-pressed="true"] { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 400; }
+
+/* ---- stage ---- */
+.stage {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px 18px 18px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+.letter {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(5rem, 26vw, 11rem);
+  line-height: 0.95;
+  color: var(--accent);
+  min-height: 1em;
+  text-transform: lowercase;
+  transition: transform .12s ease, color .12s ease;
+}
+.letter.hit { transform: scale(1.06); }
+.letter.idle { color: var(--line); }
+@media (prefers-reduced-motion: reduce) { .letter { transition: none; } }
+
+.buffer { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; min-height: 46px; align-items: center; }
+.tile {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.5rem;
+  width: 38px; height: 44px;
+  display: grid; place-items: center;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.buffer.isword .tile { background: var(--spark-soft); color: var(--spark); }
+.hint { color: var(--muted); font-size: 0.85rem; font-weight: 300; text-align: center; margin: 0; }
+
+/* ---- spoken log ---- */
+.log { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 34px; }
+.log .label {
+  font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 500;
+}
+.chip {
+  font-family: var(--display);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.95rem;
+}
+.chip.latest { background: var(--spark-soft); color: var(--spark); }
+
+/* ---- keyboard ---- */
+.keys { display: grid; gap: 6px; }
+.row { display: flex; gap: 6px; justify-content: center; }
+.key {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 2px;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  border-radius: 9px;
+  background: var(--surface);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.key.wide { flex: 2.4 1 0; font-family: var(--body); font-size: 0.8rem; color: var(--muted); }
+.key.down { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---- settings ---- */
+details.settings {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 16px;
+}
+details.settings summary { cursor: pointer; font-weight: 500; font-size: 0.9rem; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px 18px;
+  margin-top: 14px;
+}
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > span { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+select, input[type="range"] { width: 100%; }
+select {
+  font: inherit; font-size: 0.9rem;
+  padding: 7px 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.check input { accent-color: var(--accent); width: 17px; height: 17px; }
+footer { color: var(--muted); font-size: 0.78rem; font-weight: 300; text-align: center; }
+footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 0.95em; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>KeySpeak</h1>
+      <p id="count">reading dictionary…</p>
+    </div>
+    <button id="sound" class="primary" aria-pressed="false">Turn on sound</button>
+  </header>
+
+  <section class="stage" aria-live="polite">
+    <div class="letter idle" id="letter">a</div>
+    <div class="buffer" id="buffer"></div>
+    <p class="hint" id="hint">Turn on sound, then type on any keyboard — or tap the keys below.</p>
+  </section>
+
+  <div class="log" id="log"><span class="label">Said</span></div>
+
+  <div class="keys" id="keys"></div>
+
+  <details class="settings">
+    <summary>Voice and spelling settings</summary>
+    <div class="grid">
+      <label class="field"><span>Voice</span><select id="voice"></select></label>
+      <label class="field"><span>Letters</span>
+        <select id="mode">
+          <option value="name">Letter names (ay, bee, see)</option>
+          <option value="sound">Letter sounds (a, buh, kuh)</option>
+          <option value="off">Don't say letters</option>
+        </select>
+      </label>
+      <label class="field"><span>Pause before saying a word</span>
+        <select id="idle">
+          <option value="1200">Short — 1.2 seconds</option>
+          <option value="2000" selected>Medium — 2 seconds</option>
+          <option value="3200">Long — 3.2 seconds</option>
+        </select>
+      </label>
+      <label class="field"><span>Speed <output id="rateOut">0.9</output></span>
+        <input type="range" id="rate" min="0.5" max="1.4" step="0.05" value="0.9">
+      </label>
+      <label class="check"><input type="checkbox" id="words" checked> Say whole words</label>
+      <label class="check"><input type="checkbox" id="zee"> Say “zee” instead of “zed”</label>
+    </div>
+  </details>
+
+  <footer>
+    <span id="status">Space or Enter finishes a word. Backspace deletes, Esc clears.</span>
+  </footer>
+</div>
+
+<script id="wordlist" type="text/plain">__WORDS__</script>
+<script>
+(function () {
+  "use strict";
+
+  // ---------------------------------------------------------------- dictionary
+  var WORDS = document.getElementById("wordlist").textContent.trim().split(" ");
+  document.getElementById("count").textContent = WORDS.length.toLocaleString() + " words known";
+
+  function lowerBound(s) {
+    var lo = 0, hi = WORDS.length;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (WORDS[mid] < s) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
+  function isWord(s) { var i = lowerBound(s); return i < WORDS.length && WORDS[i] === s; }
+  function startsAt(i, s) { return i < WORDS.length && WORDS[i].lastIndexOf(s, 0) === 0; }
+  function isPrefix(s) { return startsAt(lowerBound(s), s); }           // some word begins with s
+  function isExtendable(s) {                                           // some LONGER word begins with s
+    var i = lowerBound(s);
+    if (i < WORDS.length && WORDS[i] === s) i++;
+    return startsAt(i, s);
+  }
+
+  // ---------------------------------------------------------------- speech
+  var synth = window.speechSynthesis;
+  var supported = !!synth;
+  var voices = [], chosen = null, enabled = false;
+  var queue = [], speaking = false, guard = null;
+  var MAX_QUEUE = 80;    // generous: letters are batched, so a backlog clears fast
+  var BATCH = 12;        // letters spoken in one breath when typing outruns the voice
+
+  function pickVoices() {
+    voices = synth.getVoices().filter(function (v) { return /^en/i.test(v.lang); });
+    if (!voices.length) voices = synth.getVoices();
+    var sel = document.getElementById("voice");
+    sel.innerHTML = "";
+    voices.forEach(function (v, i) {
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = v.name + " (" + v.lang + ")";
+      sel.appendChild(o);
+    });
+    var saved = load("voice");
+    var idx = voices.findIndex(function (v) { return v.name === saved; });
+    if (idx < 0) idx = voices.findIndex(function (v) { return /en-AU/i.test(v.lang); });
+    if (idx < 0) idx = voices.findIndex(function (v) { return /en-GB/i.test(v.lang); });
+    if (idx < 0) idx = 0;
+    if (voices.length) { sel.value = String(idx); chosen = voices[idx]; }
+  }
+
+  function next() { speaking = false; clearTimeout(guard); drain(); }
+
+  function drain() {
+    if (speaking || !queue.length || !enabled) return;
+
+    // A word is spoken on its own. Letters are taken in a batch, so a run of fast
+    // keystrokes becomes one utterance instead of a queue of stop-start ones.
+    var chunk = [queue.shift()];
+    if (!chunk[0].word) {
+      while (queue.length && !queue[0].word && chunk.length < BATCH) chunk.push(queue.shift());
+    }
+    var isWord = chunk[0].word;
+    var text = chunk.map(function (c) { return c.text; }).join(" ");
+
+    var base = Number(document.getElementById("rate").value);
+    var behind = Math.min(0.45, queue.length * 0.05);   // speed up while catching up
+    var u = new SpeechSynthesisUtterance(text);
+    if (chosen) { u.voice = chosen; u.lang = chosen.lang; }
+    u.rate = Math.min(2, isWord ? base * 0.92 : base * (1 + behind));
+    u.pitch = isWord ? 1 : 1.05;
+    u.onend = u.onerror = next;
+
+    speaking = true;
+    try { synth.speak(u); } catch (e) { return next(); }
+
+    // Some browsers never fire onend on short utterances, which would stall the
+    // queue and silence everything after it. Move on anyway once it must be done.
+    clearTimeout(guard);
+    guard = setTimeout(next, 900 + (text.length * 140) / u.rate);
+  }
+
+  function say(text, isFullWord) {
+    if (!enabled || !text) return;
+    if (queue.length >= MAX_QUEUE) queue.shift();
+    queue.push({ text: text, word: !!isFullWord });
+    drain();
+  }
+
+  // Chrome quietly pauses the engine when a tab is backgrounded; nudge it awake.
+  setInterval(function () {
+    if (!enabled || !synth) return;
+    if (synth.paused) { try { synth.resume(); } catch (e) {} }
+  }, 2000);
+
+  // ---------------------------------------------------------------- letters
+  var NAMES = {
+    a: "ay", b: "bee", c: "see", d: "dee", e: "ee", f: "eff", g: "jee", h: "aitch",
+    i: "eye", j: "jay", k: "kay", l: "ell", m: "em", n: "en", o: "oh", p: "pee",
+    q: "cue", r: "arr", s: "ess", t: "tee", u: "you", v: "vee", w: "double you",
+    x: "ex", y: "why", z: "zed"
+  };
+  var SOUNDS = {
+    a: "ah", b: "buh", c: "kuh", d: "duh", e: "eh", f: "ff", g: "guh", h: "huh",
+    i: "ih", j: "juh", k: "kuh", l: "ll", m: "mm", n: "nn", o: "oh", p: "puh",
+    q: "kwuh", r: "rr", s: "ss", t: "tuh", u: "uh", v: "vv", w: "wuh",
+    x: "ks", y: "yuh", z: "zz"
+  };
+  var DIGITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+  function letterSpeech(c) {
+    var mode = document.getElementById("mode").value;
+    if (mode === "off") return "";
+    if (mode === "sound") return SOUNDS[c];
+    if (c === "z" && document.getElementById("zee").checked) return "zee";
+    return NAMES[c];
+  }
+
+  // ---------------------------------------------------------------- buffer
+  var MAX_WORD = 24;
+  var buf = "", lastKey = 0, quietAt = 0;
+  var elLetter = document.getElementById("letter");
+  var elBuffer = document.getElementById("buffer");
+  var elLog = document.getElementById("log");
+
+  function paintBuffer() {
+    elBuffer.innerHTML = "";
+    for (var i = 0; i < buf.length; i++) {
+      var t = document.createElement("div");
+      t.className = "tile";
+      t.textContent = buf[i];
+      elBuffer.appendChild(t);
+    }
+    elBuffer.classList.toggle("isword", buf.length >= 2 && isWord(buf));
+  }
+
+  function showLetter(c) {
+    elLetter.textContent = c;
+    elLetter.classList.remove("idle");
+    elLetter.classList.add("hit");
+    setTimeout(function () { elLetter.classList.remove("hit"); }, 110);
+  }
+
+  function logWord(w) {
+    var chip = document.createElement("span");
+    chip.className = "chip latest";
+    chip.textContent = w;
+    var old = elLog.querySelector(".chip.latest");
+    if (old) old.classList.remove("latest");
+    elLog.insertBefore(chip, elLog.children[1] || null);
+    var chips = elLog.querySelectorAll(".chip");
+    for (var i = 8; i < chips.length; i++) chips[i].remove();
+  }
+
+  // Names the voice reads better with a capital, plus a few respellings for ones it gets wrong.
+  var NAME_WORDS = {};
+  "__NAMES__".split(" ").forEach(function (n) { if (n) NAME_WORDS[n] = 1; });
+  var SAY_AS = { vaughan: "Vaughn" };
+
+  function spokenForm(w) {
+    if (SAY_AS[w]) return SAY_AS[w];
+    if (NAME_WORDS[w]) return w.charAt(0).toUpperCase() + w.slice(1);
+    return w;
+  }
+
+  function sayWord() {
+    if (document.getElementById("words").checked) say(spokenForm(buf), true);
+    logWord(buf);
+  }
+
+  function clearBuf() { buf = ""; paintBuffer(); }
+
+  function finishWord() {                       // explicit boundary: space or enter
+    if (buf.length >= 2 && isWord(buf)) sayWord();
+    clearBuf();
+  }
+
+  function onLetter(c) {
+    lastKey = Date.now(); quietAt = 0;
+    showLetter(c);
+    say(letterSpeech(c), false);
+    if (buf.length >= MAX_WORD) buf = "";
+    buf += c;
+    if (!isPrefix(buf)) {                       // dead end: keep the longest suffix still viable
+      var start = 1;
+      while (start < buf.length && !isPrefix(buf.slice(start))) start++;
+      buf = buf.slice(start);
+    }
+    if (buf.length >= 2 && isWord(buf) && !isExtendable(buf)) {
+      sayWord();                                // no longer word to wait for — say it now
+      clearBuf();
+      return;
+    }
+    paintBuffer();
+  }
+
+  function onDigit(d) { lastKey = Date.now(); quietAt = 0; showLetter(d); say(DIGITS[+d], false); }
+
+  // A word that could still grow ("alex" → "alexander") waits for a pause. The pause is
+  // measured from the moment the last letter finishes being SPOKEN, not from the keystroke,
+  // so a fast typist can stay ahead of it and reach the longer word.
+  setInterval(function () {
+    var quiet = !speaking && queue.length === 0;
+    if (!quiet) { quietAt = 0; return; }        // still saying letters — the pause hasn't started
+    if (!quietAt) quietAt = Date.now();
+    if (!buf) return;
+    var idle = Date.now() - Math.max(quietAt, lastKey);
+    if (buf.length >= 2 && idle > Number(document.getElementById("idle").value) && isWord(buf)) {
+      sayWord(); clearBuf();
+    } else if (Date.now() - lastKey > 10000) {
+      clearBuf();
+    }
+  }, 120);
+
+  // ---------------------------------------------------------------- input
+  function handleKeyChar(ch, code) {
+    if (/^[a-z]$/.test(ch)) onLetter(ch);
+    else if (/^[0-9]$/.test(ch)) onDigit(ch);
+    else if (code === "Space" || code === "Enter") finishWord();
+    else if (code === "Backspace") { lastKey = Date.now(); quietAt = 0; buf = buf.slice(0, -1); paintBuffer(); }
+    else if (code === "Escape") clearBuf();
+  }
+
+  window.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.repeat) { e.preventDefault(); return; }   // a held-down key shouldn't flood the voice
+    var ch = e.key.length === 1 ? e.key.toLowerCase() : "";
+    var code = e.key === " " ? "Space" : e.key;
+    if (/^[a-z0-9]$/.test(ch) || code === "Space" || code === "Enter" ||
+        code === "Backspace" || code === "Escape") {
+      e.preventDefault();
+      if (t && t.tagName === "BUTTON" && (code === "Space" || code === "Enter")) t.blur();
+      unlock();                                 // the keypress itself is the gesture that starts audio
+      handleKeyChar(ch, code);
+      flashKey(ch || code);
+    }
+  });
+
+  // ---------------------------------------------------------------- on-screen keys
+  var ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  var elKeys = document.getElementById("keys");
+  var keyEls = {};
+  ROWS.forEach(function (row, ri) {
+    var d = document.createElement("div");
+    d.className = "row";
+    if (ri === 2) d.appendChild(makeKey("⌫", "Backspace", true));
+    row.split("").forEach(function (c) { d.appendChild(makeKey(c, c, false)); });
+    if (ri === 2) d.appendChild(makeKey("space", "Space", true));
+    elKeys.appendChild(d);
+  });
+  function makeKey(label, token, wide) {
+    var b = document.createElement("button");
+    b.className = "key" + (wide ? " wide" : "");
+    b.textContent = label;
+    b.type = "button";
+    b.addEventListener("click", function () {
+      unlock();
+      handleKeyChar(token.length === 1 ? token : "", token.length === 1 ? "" : token);
+      b.blur();
+    });
+    keyEls[token] = b;
+    return b;
+  }
+  function flashKey(token) {
+    var b = keyEls[token];
+    if (!b) return;
+    b.classList.add("down");
+    setTimeout(function () { b.classList.remove("down"); }, 110);
+  }
+
+  // ---------------------------------------------------------------- settings storage
+  function save(k, v) { try { localStorage.setItem("keyspeak." + k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem("keyspeak." + k); } catch (e) { return null; } }
+
+  ["mode", "idle", "rate"].forEach(function (id) {
+    var el = document.getElementById(id);
+    var v = load(id);
+    if (v !== null) el.value = v;
+    el.addEventListener("change", function () { save(id, el.value); });
+  });
+  ["words", "zee"].forEach(function (id) {
+    var el = document.getElementById(id);
+    var v = load(id);
+    if (v !== null) el.checked = v === "1";
+    el.addEventListener("change", function () { save(id, el.checked ? "1" : "0"); });
+  });
+  var rate = document.getElementById("rate"), rateOut = document.getElementById("rateOut");
+  rateOut.textContent = rate.value;
+  rate.addEventListener("input", function () { rateOut.textContent = rate.value; });
+  document.getElementById("voice").addEventListener("change", function (e) {
+    chosen = voices[+e.target.value] || null;
+    if (chosen) save("voice", chosen.name);
+  });
+
+  // ---------------------------------------------------------------- sound gate
+  var btn = document.getElementById("sound");
+  var hint = document.getElementById("hint");
+  var status = document.getElementById("status");
+
+  var muted = false;                            // set only when the user switches sound off
+
+  function unlock() {
+    if (enabled || muted || !supported) return;
+    enabled = true;
+    btn.textContent = "Sound is on";
+    btn.setAttribute("aria-pressed", "true");
+    hint.textContent = "Type a word — letters are said as you go, then the whole word.";
+    try { synth.speak(new SpeechSynthesisUtterance(" ")); } catch (e) {}
+    say("ready", true);
+  }
+  btn.addEventListener("click", function () {
+    if (!enabled) { muted = false; unlock(); return; }
+    enabled = false;
+    muted = true;
+    queue.length = 0;
+    speaking = false;
+    clearTimeout(guard);
+    try { synth.cancel(); } catch (e) {}
+    btn.textContent = "Turn on sound";
+    btn.setAttribute("aria-pressed", "false");
+    hint.textContent = "Sound is off. Letters still show on screen.";
+  });
+  if (!supported) {
+    btn.disabled = true;
+    btn.textContent = "No speech in this browser";
+    status.textContent = "This browser has no speech synthesis. Letters and words still appear on screen.";
+  } else {
+    pickVoices();
+    synth.addEventListener("voiceschanged", pickVoices);
+  }
+
+  paintBuffer();
+})();
+</script>
