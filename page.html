@@ -15,6 +15,7 @@
   --accent-soft: #dde2fb;
   --spark: #e8900c;
   --spark-soft: #fbead0;
+  --oops: #c8343f;
   --display: "Fredoka", "Trebuchet MS", sans-serif;
   --body: "Lexend", "Segoe UI", system-ui, sans-serif;
 }
@@ -30,6 +31,7 @@
     --accent-soft: #232c4d;
     --spark: #f5b53d;
     --spark-soft: #3a2f16;
+    --oops: #ff7a83;
     color-scheme: dark;
   }
 }
@@ -44,6 +46,7 @@
   --accent-soft: #232c4d;
   --spark: #f5b53d;
   --spark-soft: #3a2f16;
+  --oops: #ff7a83;
   color-scheme: dark;
 }
 
@@ -133,6 +136,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   border-radius: 8px;
 }
 .buffer.isword .tile { background: var(--spark-soft); color: var(--spark); }
+.buffer .tile.typo { background: transparent; color: var(--oops); outline: 2px dashed var(--oops); outline-offset: -2px; }
 .hint { color: var(--muted); font-size: 0.85rem; font-weight: 300; text-align: center; margin: 0; }
 
 /* ---- spoken log ---- */
@@ -235,6 +239,7 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
           <option value="1200">Short — 1.2 seconds</option>
           <option value="2000" selected>Medium — 2 seconds</option>
           <option value="3200">Long — 3.2 seconds</option>
+          <option value="5000">Extra long — 5 seconds</option>
         </select>
       </label>
       <label class="field"><span>Speed <output id="rateOut">0.9</output></span>
@@ -370,6 +375,7 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
   // ---------------------------------------------------------------- buffer
   var MAX_WORD = 24;
   var buf = "", lastKey = 0, quietAt = 0;
+  var typo = "";     // a letter that led nowhere, held so Backspace can undo it before buf is trimmed
   var elLetter = document.getElementById("letter");
   var elBuffer = document.getElementById("buffer");
   var elLog = document.getElementById("log");
@@ -382,7 +388,13 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
       t.textContent = buf[i];
       elBuffer.appendChild(t);
     }
-    elBuffer.classList.toggle("isword", buf.length >= 2 && isWord(buf));
+    if (typo) {
+      var x = document.createElement("div");
+      x.className = "tile typo";
+      x.textContent = typo;
+      elBuffer.appendChild(x);
+    }
+    elBuffer.classList.toggle("isword", !typo && buf.length >= 2 && isWord(buf));
   }
 
   function showLetter(c) {
@@ -419,10 +431,10 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
     logWord(buf);
   }
 
-  function clearBuf() { buf = ""; paintBuffer(); }
+  function clearBuf() { buf = ""; typo = ""; paintBuffer(); }
 
   function finishWord() {                       // explicit boundary: space or enter
-    if (buf.length >= 2 && isWord(buf)) sayWord();
+    if (!typo && buf.length >= 2 && isWord(buf)) sayWord();
     clearBuf();
   }
 
@@ -430,8 +442,14 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
     lastKey = Date.now(); quietAt = 0;
     showLetter(c);
     say(letterSpeech(c), false);
-    if (buf.length >= MAX_WORD) buf = "";
-    buf += c;
+    if (buf.length >= MAX_WORD) { buf = ""; typo = ""; }
+    if (!typo && buf && !isPrefix(buf + c)) {   // dead end: hold the letter so Backspace can undo it
+      typo = c;
+      paintBuffer();
+      return;
+    }
+    buf += typo + c;                            // typing on past a typo commits it
+    typo = "";
     if (!isPrefix(buf)) {                       // dead end: keep the longest suffix still viable
       var start = 1;
       while (start < buf.length && !isPrefix(buf.slice(start))) start++;
@@ -454,9 +472,9 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
     var quiet = !speaking && queue.length === 0;
     if (!quiet) { quietAt = 0; return; }        // still saying letters — the pause hasn't started
     if (!quietAt) quietAt = Date.now();
-    if (!buf) return;
+    if (!buf && !typo) return;
     var idle = Date.now() - Math.max(quietAt, lastKey);
-    if (buf.length >= 2 && idle > Number(document.getElementById("idle").value) && isWord(buf)) {
+    if (!typo && buf.length >= 2 && idle > Number(document.getElementById("idle").value) && isWord(buf)) {
       sayWord(); clearBuf();
     } else if (Date.now() - lastKey > 10000) {
       clearBuf();
@@ -468,7 +486,11 @@ footer code { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fon
     if (/^[a-z]$/.test(ch)) onLetter(ch);
     else if (/^[0-9]$/.test(ch)) onDigit(ch);
     else if (code === "Space" || code === "Enter") finishWord();
-    else if (code === "Backspace") { lastKey = Date.now(); quietAt = 0; buf = buf.slice(0, -1); paintBuffer(); }
+    else if (code === "Backspace") {
+      lastKey = Date.now(); quietAt = 0;
+      if (typo) typo = ""; else buf = buf.slice(0, -1);
+      paintBuffer();
+    }
     else if (code === "Escape") clearBuf();
   }
 

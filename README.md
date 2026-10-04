@@ -24,7 +24,11 @@ pace. Waiting for the voice to catch up first lets a fast typist reach the longe
 
 If the buffer can no longer become any word, the leading letters are dropped until the
 remainder is viable again — typing `xqzdog` still says `dog`. A buffer that is not a
-word is discarded after 10 seconds. Backspace deletes a letter; Esc clears.
+word is discarded after 10 seconds. Esc clears.
+
+A letter that would lead to a dead end is held back as a dashed "typo" tile instead of
+trimming straight away, so Backspace removes just that letter and typing carries on from
+the word in progress. Typing another letter instead commits it and the trimming above applies.
 
 Letters are batched into a single utterance when typing outruns the voice, because each
 `speechSynthesis.speak()` call carries 100–200 ms of fixed overhead regardless of how
@@ -38,44 +42,37 @@ the browser never fires `onend`, which some do on very short utterances.
 |---|---|
 | `keyspeak.html` | **The deliverable.** Self-contained page, dictionary embedded. |
 | `page.html` | Source template. Same page with `__WORDS__` and `__NAMES__` placeholders. |
-| `build.sh` | Builds the dictionary and fills the placeholders. |
-| `make_words.sh` | Dictionary filter: frequency list ∩ SCOWL, plus the name bypass. |
-| `fetch-sources.sh` | Downloads the frequency list (gitignored, large, reproducible). |
-| `extras.txt` | Everyday words a frequency corpus under-weights: zebra, sock, kite. |
+| `build.sh` | Fills the placeholders from the word and name lists. |
+| `wordlist.txt` | **The dictionary**, one word per line. |
 | `names.txt` | Family and personal names. |
 | `names-au.txt` | Common Australian given names. |
 | `places.txt` | Place names. |
+| `blocklist.txt` | Words removed from the dictionary, e.g. `yell` so `yellow` can be reached. |
 
 Edit `page.html`, never `keyspeak.html` — the latter is generated and overwritten.
 
 ## Building
 
 ```bash
-./fetch-sources.sh     # once: downloads en_50k.txt
-./build.sh             # regenerates words.txt and keyspeak.html
+./build.sh             # regenerates keyspeak.html
 ```
 
-Needs bash, awk, python3 and the SCOWL dictionaries (`sudo apt-get install wamerican
-wbritish`, which provide `/usr/share/dict/*-english`).
+Needs bash and python3, nothing else.
 
-To add a name, append a line to `names.txt` and rebuild. Names go in these files rather
-than in `extras.txt` because the SCOWL cross-filter only holds names capitalised and
-would strip them; the `NAMES=` path merges them *after* that filter runs.
-
-Dictionary size is set by `FREQ_TOP`, default 20000, giving about 15,500 words after
-filtering:
-
-```bash
-FREQ_TOP=30000 ./build.sh    # ~21,000 words
-```
+The dictionary is `wordlist.txt` plus every name and place, minus `blocklist.txt`. To add
+a word, append it to `wordlist.txt`; to add a name, append it to `names.txt`, which also
+makes it spoken with a capital. To stop a short word getting in the way of a longer one
+(`yell` before `yellow`), add it to `blocklist.txt`. Order doesn't matter; the build sorts.
 
 ## Vocabulary sources
 
-The base is the top `FREQ_TOP` entries of a frequency list built from film and TV
-subtitles ([hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords),
-2018 English). Conversational English suits this better than a web corpus — an earlier
-build on the Google 10k web list was missing *dinosaur*, *rosemary* and *melbourne*.
-Spelling is sanity-checked against SCOWL, which drops abbreviations and brand names.
+`wordlist.txt` was generated once and is now edited by hand. It started as the top
+20,000 entries of a frequency list built from film and TV subtitles
+([hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords), 2018 English),
+plus everyday words that list under-weights (zebra, sock, kite). Conversational English
+suits this better than a web corpus — an earlier build on the Google 10k web list was
+missing *dinosaur*, *rosemary* and *melbourne*. It was then checked against the SCOWL
+spelling dictionaries, which dropped abbreviations and brand names.
 
 Australian given names were seeded from the 2025 state registry announcements
 ([WA](https://www.wa.gov.au/government/announcements/new-baby-names-enter-was-most-popular-lists-2025),

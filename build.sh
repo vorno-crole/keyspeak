@@ -1,32 +1,31 @@
 #!/bin/bash
-# build.sh — regenerate the dictionary and inject it into keyspeak.html
+# build.sh — inject the dictionary into keyspeak.html
 #
 # Sources:
-#   en_50k.txt    frequency-ranked English (OpenSubtitles via hermitdave/FrequencyWords);
-#                 the top FREQ_TOP entries form the base vocabulary
-#   extras.txt    everyday words a frequency corpus under-weights (zebra, sock, kite)
+#   wordlist.txt  the dictionary, one lowercase word per line; edit this to add words
 #   names.txt     family and personal names
 #   names-au.txt  common Australian given names
 #   places.txt    place names
-# The base is cross-filtered against SCOWL (/usr/share/dict/*-english) to drop
-# abbreviations and misspellings; names and places BYPASS that filter, since SCOWL
-# only holds them capitalised.
+#   blocklist.txt words removed last, e.g. 'yell', which stops 'yellow' being reached
+# Names and places are added to the dictionary and are also spoken with a capital.
 set -euo pipefail
 cd "$(dirname "$0")"
-FREQ_TOP="${FREQ_TOP:-20000}"
-
-awk -v n="$FREQ_TOP" 'NR<=n{print $1}' en_50k.txt > base.txt
-cat extras.txt >> base.txt
-sort -u names.txt names-au.txt places.txt > names-all.txt
-
-NAMES=names-all.txt ./make_words.sh base.txt \
-  /usr/share/dict/american-english /usr/share/dict/british-english
 
 python3 - << 'PY'
-words = open('words.txt').read().strip()
-names = ' '.join(sorted(set(open('names-all.txt').read().split())))
-html  = open('page.html').read()
+import re
+
+def read(path):
+    return [w.strip().lower() for w in open(path) if w.strip()]
+
+names = set(read('names.txt') + read('names-au.txt') + read('places.txt'))
+names = {n for n in names if re.fullmatch(r'[a-z]{2,24}', n)}
+block = set(read('blocklist.txt'))
+# The page binary-searches this list, so it must stay sorted.
+words = sorted((set(read('wordlist.txt')) | names) - block)
+
+html = open('page.html').read()
 assert '__WORDS__' in html and '__NAMES__' in html
-open('keyspeak.html', 'w').write(html.replace('__WORDS__', words).replace('__NAMES__', names))
-print('keyspeak.html:', len(open('keyspeak.html').read()), 'bytes;', len(names.split()), 'names')
+html = html.replace('__WORDS__', ' '.join(words)).replace('__NAMES__', ' '.join(sorted(names)))
+open('keyspeak.html', 'w').write(html)
+print('keyspeak.html:', len(html), 'bytes;', len(words), 'words;', len(names), 'names')
 PY
